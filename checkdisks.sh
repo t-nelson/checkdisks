@@ -283,4 +283,5 @@ for I in $(seq 0 $((N_DEVS - 1))); do
   done
 done
 
-printf "\x1B[0m\n"
+printf "${CL_N}\n"
+
