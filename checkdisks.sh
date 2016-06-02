@@ -122,7 +122,13 @@ prettify_age()
     printf "%2d%s %2d%s" ${AGE} "${UNITS[$I]}" ${SUB} "${UNITS[((I - 1))]}"
   fi
 }
-  
+
+prettify_temp()
+{
+  NUM=$(echo $1 | sed -e 's/[^0-9.]*\([0-9.]\+\).*/\1/')
+  printf "%.1lfF" $NUM
+}
+
 F=-1
 HEADING[((++F))]="Device"
 
@@ -155,6 +161,7 @@ GREP_PAT[$F]="temperature-celsius"
 SED_PAT[$F]='s/.*\/\s\?\([0-9]\+\(\.[0-9]\+\)\?F\).*/\1/'
 JUSTIFY[$F]=""
 COLORIZE[$F]=colorize_temp
+DATA_MOD[$F]=prettify_temp
 
 HEADING[((++F))]="Bad Sect."
 GREP_PAT[$F]="current-pending-sector|reported-uncorrect"
