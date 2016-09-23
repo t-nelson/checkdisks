@@ -6,9 +6,23 @@ if [ -z "$UDISKS" ]; then
   exit 1
 fi
 
+USE_COLOR=1
+
+OPTIND=1
+while getopts "ns:" opt; do
+  case $opt in
+    n)
+      USE_COLOR=0
+      ;;
+    *)
+      exit 3
+      ;;
+  esac
+done
+
 declare -r NA="-N/A-"
 
-if test $# -ge 1 -a "$1" == "-n"; then
+if test $USE_COLOR -eq 0; then
   declare -r CL_N=""
   declare -r CL_RED=""
   declare -r CL_GRN=""
