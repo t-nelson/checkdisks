@@ -7,12 +7,16 @@ if [ -z "$UDISKS" ]; then
 fi
 
 USE_COLOR=1
+USE_SORT=""
 
 OPTIND=1
 while getopts "ns:" opt; do
   case $opt in
     n)
       USE_COLOR=0
+      ;;
+    s)
+      USE_SORT=$OPTARG
       ;;
     *)
       exit 3
@@ -45,6 +49,7 @@ else
 fi
 
 HEADING=()
+SORT_PARAM=()
 GREP_PAT=()
 SED_PAT=()
 DATA_MOD=()
@@ -145,32 +150,46 @@ prettify_temp()
 
 F=-1
 HEADING[((++F))]="Device"
+SORT_PARAM[$F]="dev"
+SORT_FLAG[$F]=""
 
 HEADING[((++F))]="Port"
+SORT_PARAM[$F]="port"
+SORT_FLAG[$F]="-k1.1,1.3 -k1.4n"
 
 HEADING[((++F))]="Model #"
+SORT_PARAM[$F]="model"
+SORT_FLAG[$F]="-g"
 GREP_PAT[$F]="model:\s+"
 SED_PAT[$F]='s/^\s*model:\s\+\([^\s]\+\)/\1/'
 JUSTIFY[$F]="-"
 
 HEADING[((++F))]="Serial #"
+SORT_FLAG[$F]="-g"
+SORT_PARAM[$F]="serial"
 GREP_PAT[$F]="serial:"
 SED_PAT[$F]='s/^\s*serial:\s\+\([^\s]\+\)/\1/'
 JUSTIFY[$F]="-"
 
 HEADING[((++F))]="Size"
+SORT_FLAG[$F]="-n"
+SORT_PARAM[$F]="size"
 GREP_PAT[$F]="size:\s+"
 SED_PAT[$F]='s/^\s*size:\s*\([0-9]\+\)$/\1/'
 JUSTIFY[$F]=""
 DATA_MOD[$F]=prettify_bytes
 
 HEADING[((++F))]="Age"
+SORT_FLAG[$F]="-h"
+SORT_PARAM[$F]="age"
 GREP_PAT[$F]="power-on-hours"
 SED_PAT[$F]='s/^\s*power-on-hours.*\s\+\([0-9.]\+\s\(hours\|days\)\?\).*/\1/'
 JUSTIFY[$F]=""
 DATA_MOD[$F]=prettify_age
 
 HEADING[((++F))]="Temp."
+SORT_FLAG[$F]="-h"
+SORT_PARAM[$F]="temp"
 GREP_PAT[$F]="temperature-celsius"
 SED_PAT[$F]='s/.*\/\s\?\([0-9]\+\(\.[0-9]\+\)\?F\).*/\1/'
 JUSTIFY[$F]=""
@@ -178,12 +197,16 @@ COLORIZE[$F]=colorize_temp
 DATA_MOD[$F]=prettify_temp
 
 HEADING[((++F))]="Bad Sect."
+SORT_FLAG[$F]="-n"
+SORT_PARAM[$F]="bad"
 GREP_PAT[$F]="current-pending-sector|reported-uncorrect"
 SED_PAT[$F]='s/.*\s\([0-9]\+\)\ssectors.*/\1/'
 JUSTIFY[$F]="-"
 COLORIZE[$F]=colorize_bad_sect
 
 HEADING[((++F))]="Status"
+SORT_FLAG[$F]=""
+SORT_PARAM[$F]="status"
 GREP_PAT[$F]="overall assessment"
 SED_PAT[$F]='s/^\s*overall assessment:\s\+\([^\s]\+\)/\1/'
 JUSTIFY[$F]="-"
@@ -192,6 +215,18 @@ COLORIZE[$F]=colorize_assessment
 ASSESS_OFF=$F
 N_FIELDS=${#HEADING[@]}
 LEN_NA=${#NA}
+
+SORT_FIELD=0
+SORT_FLAGS=""
+if ! test -z "$USE_SORT"; then
+  for I in $(seq 0 $((N_FIELDS -1))); do
+    if test "$USE_SORT" = "${SORT_PARAM[$I]}"; then
+      SORT_FIELD=$I
+      SORT_FLAGS="${SORT_FLAG[$I]}"
+      break
+    fi
+  done
+fi
 
 for I in $(seq 0 $((N_FIELDS - 1))); do
   MAX_LEN[$I]=${#HEADING[$I]}
@@ -249,12 +284,6 @@ while read DEV; do
         if echo $LINE | grep -E "${GREP_PAT[$F]}" &> /dev/null; then
           DATUM=`echo $LINE | sed -e "${SED_PAT[$F]}"`
           if test $? = 0; then
-            if ! [ -z "${DATA_MOD[$F]}" ]; then
-              DATUM=`${DATA_MOD[$F]} "${DATUM}"`
-            fi
-            if test ${#DATUM} -gt ${MAX_LEN[$F]}; then
-              MAX_LEN[$F]=${#DATUM}
-            fi
             if ! [ -z "${COLORIZE[$F]}" ]; then
               DATA_COL[$OFF]=`${COLORIZE[$F]} "${DATUM}"`
             fi
@@ -270,11 +299,37 @@ while read DEV; do
   ((I++))
 done <<< "$DEVS"
 
+NDEVS=$I
+
+SORT_ORDER=()
+J=0
+while read LINE; do
+  SORT_ORDER[((J++))]=`echo $LINE | sed -e 's/.* \([0-9]\+\)$/\1/g'`
+done <<< "$(for I in $(seq 0 $((N_DEVS - 1))); do echo "${DATA[((I * N_FIELDS + SORT_FIELD))]} $I"; done | sort $SORT_FLAGS)"
+
+for I in $(seq 0 $((NDEVS - 1))); do
+  I_P=$((I * N_FIELDS))
+
+  for F in $(seq 0 $((N_FIELDS - 1))); do
+    OFF=$((I_P + F))
+    DATUM="${DATA[$OFF]}"
+    if test "$DATUM" != "${NA}"; then
+      if ! [ -z "${DATA_MOD[$F]}" ]; then
+        DATUM=`${DATA_MOD[$F]} "${DATUM}"`
+      fi
+    fi
+    if test ${#DATUM} -gt ${MAX_LEN[$F]}; then
+      MAX_LEN[$F]=${#DATUM}
+    fi
+    DATA[$OFF]="$DATUM"
+  done
+done
+
 for I in $(seq 0 $((N_FIELDS - 1))); do
   printf "${CL_BOLD}%-*.*s  ${CL_N}" "${MAX_LEN[$I]}" "${MAX_LEN[$I]}" "${HEADING[$I]}"
 done
 
-for I in $(seq 0 $((N_DEVS - 1))); do
+for I in ${SORT_ORDER[*]}; do
   echo
   I_P=$((I * N_FIELDS))
 
