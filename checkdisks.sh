@@ -1,5 +1,18 @@
 #!/bin/bash
 
+declare -r PROG_NAME=$0
+
+print_help()
+{
+  echo  "Usage: $PROG_NAME [OPTIONS]"
+  echo  "OPTIONS:"
+  echo  " -h          Display this help message"
+  echo  " -n          Don't colorize output"
+  echo  " -s <field>  Sort by \"field\", one of"
+  echo  "               dev, port, model, serial,"
+  echo  "               size, age, bad, status."
+}
+
 UDISKS=`which udisks`
 if [ -z "$UDISKS" ]; then
   echo $0 requires \"udisks\". Please install it first.
@@ -10,7 +23,7 @@ USE_COLOR=1
 USE_SORT=""
 
 OPTIND=1
-while getopts "ns:" opt; do
+while getopts "hns:" opt; do
   case $opt in
     n)
       USE_COLOR=0
@@ -18,7 +31,8 @@ while getopts "ns:" opt; do
     s)
       USE_SORT=$OPTARG
       ;;
-    *)
+    h|*)
+      print_help
       exit 3
       ;;
   esac
